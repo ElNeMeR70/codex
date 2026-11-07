@@ -9,6 +9,18 @@ const APP_ID: &str = "codex";
 // Keep the blocker process alive "long enough" without needing restarts.
 // This is `i32::MAX` seconds, which is accepted by common `sleep` implementations.
 const BLOCKER_SLEEP_SECONDS: &str = "2147483647";
+const SYSTEMD_INHIBIT_ARGS: [&str; 10] = [
+    "--what=idle",
+    "--mode=block",
+    "--no-ask-password",
+    "--who",
+    APP_ID,
+    "--why",
+    ASSERTION_REASON,
+    "--",
+    "sleep",
+    BLOCKER_SLEEP_SECONDS,
+];
 
 #[derive(Debug, Default)]
 pub(crate) struct LinuxSleepInhibitor {
@@ -176,17 +188,7 @@ fn spawn_backend(backend: LinuxBackend) -> Result<Child, std::io::Error> {
     let mut command = match backend {
         LinuxBackend::SystemdInhibit => {
             let mut command = Command::new("systemd-inhibit");
-            command.args([
-                "--what=idle",
-                "--mode=block",
-                "--who",
-                APP_ID,
-                "--why",
-                ASSERTION_REASON,
-                "--",
-                "sleep",
-                BLOCKER_SLEEP_SECONDS,
-            ]);
+            command.args(SYSTEMD_INHIBIT_ARGS);
             command
         }
         LinuxBackend::GnomeSessionInhibit => {
@@ -227,4 +229,29 @@ fn spawn_backend(backend: LinuxBackend) -> Result<Child, std::io::Error> {
 
 fn child_exited(error: &std::io::Error) -> bool {
     matches!(error.kind(), std::io::ErrorKind::InvalidInput)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn systemd_inhibit_passes_no_ask_password() {
+        assert_eq!(
+            SYSTEMD_INHIBIT_ARGS,
+            [
+                "--what=idle",
+                "--mode=block",
+                "--no-ask-password",
+                "--who",
+                APP_ID,
+                "--why",
+                ASSERTION_REASON,
+                "--",
+                "sleep",
+                BLOCKER_SLEEP_SECONDS,
+            ]
+        );
+    }
 }
